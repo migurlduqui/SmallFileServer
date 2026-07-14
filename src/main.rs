@@ -16,7 +16,7 @@ async fn main() {
     let app = Router::new()
         .route("/api/upload", post(upload))
         .route("/api/download/{filename}", get(download))
-
+        .route("/api/list", get(routes::list))
         .layer(CorsLayer::permissive());
     
     // Start the server
