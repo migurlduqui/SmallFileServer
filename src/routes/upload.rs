@@ -3,10 +3,10 @@ use axum::http::StatusCode;
 use axum::extract::Multipart;
 use axum::Json;
 use serde_json::{json, Value};
-use std::fs;
 use uuid::Uuid;
 use crate::models::FileInfo;
 use chrono::Utc;
+use super::utils::validate_file_name::validate_filename;
 
 
 pub async fn upload(
@@ -35,6 +35,9 @@ pub async fn upload(
         .to_string();
 
     println!("Receiving file: {} (type: {})", original_name, content_type);
+
+    validate_filename(&original_name)?;
+
     // Second we read the Data
 
     let data = field.
@@ -50,7 +53,7 @@ pub async fn upload(
     let unique_name = format!("{}-{}", Uuid::new_v4(), original_name);
     let save_path = format!("uploads/{}", unique_name);
 
-    fs::write(&save_path, &data).map_err(|e| {
+    tokio::fs::write(&save_path, &data).await.map_err(|e| {
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()})))
     })?;
 

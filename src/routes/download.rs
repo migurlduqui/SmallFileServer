@@ -2,33 +2,16 @@ use axum::extract::Path;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::Json;
 use serde_json::{json, Value};
-use std::fs;
-use std::path::{Path as StdPath, Component};
+use std::path::Path as StdPath;
+use super::utils::validate_file_name::safe_join;
 
-pub async fn download(    
+pub async fn download(
     Path(filename): Path<String>,
 ) -> Result<(HeaderMap, Vec<u8>), (StatusCode, Json<Value>)> {
-    
-    
+
+
     let base_path = StdPath::new("uploads");
-    let full_path = base_path.join(&filename);
-
-    // Normalize the path and check for parent dir components
-    let normalized = full_path.components().collect::<Vec<_>>();
-    if normalized.iter().any(|c| matches!(c, Component::ParentDir)) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": "Invalid file path"})),
-        ));
-    }
-
-    // Also ensure we're still inside the uploads directory
-    if !normalized.first().map_or(false, |c| matches!(c, Component::Normal(_))) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": "Invalid file path"})),
-        ));
-    }
+    let full_path = safe_join(base_path, &filename)?;
 
     // ─── STEP 2: Check if the file exists ───
     if !full_path.exists() {
@@ -44,7 +27,7 @@ pub async fn download(
     // fs::read() loads the ENTIRE file into memory as Vec<u8>.
     // For a learning project this is fine.
     // For very large files, you'd use streaming (tokio::fs::read).
-    let data = fs::read(&full_path).map_err(|e| {
+    let data = tokio::fs::read(&full_path).await.map_err(|e| {
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()})))
     })?;
 

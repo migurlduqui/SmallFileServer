@@ -1,7 +1,7 @@
+use async_recursion::async_recursion;
 use axum::http::StatusCode;
 use axum::Json;
 use serde_json::{json, Value};
-use std::fs;
 use std::path::Path;
 
 use crate::models::FileInfo;
@@ -10,7 +10,7 @@ pub async fn list() -> Result<Json<Vec<FileInfo>>, (StatusCode, Json<Value>)> {
     let mut files: Vec<FileInfo> = Vec::new();
 
     // Start recursive traversal from the uploads directory
-    collect_files(Path::new("uploads"), &mut files)?;
+    collect_files(Path::new("uploads"), &mut files).await?;
 
     Ok(Json(files))
 }
@@ -24,34 +24,34 @@ pub async fn list() -> Result<Json<Vec<FileInfo>>, (StatusCode, Json<Value>)> {
 ///
 /// The `filename` field stores the relative path from `uploads/`,
 /// so subfolder files look like: "subfolder/photo.jpg"
-fn collect_files(
+#[async_recursion]
+async fn collect_files(
     dir: &Path,
     files: &mut Vec<FileInfo>,
 ) -> Result<(), (StatusCode, Json<Value>)> {
     // Read the directory entries
-    let entries = fs::read_dir(dir).map_err(|e| {
+    let mut entries = tokio::fs::read_dir(dir).await
+    .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"501": format!("Failed to read directory: {}", e)})),
         )
     })?;
 
-    for entry in entries {
-        let entry = entry.map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"501": format!("Failed to read entry: {}", e)})),
-            )
-        })?;
-
+    while let Some(entry) = entries.next_entry().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"501": format!("Failed to read entry: {}", e)})),
+        )
+    })? {
         let path = entry.path();
 
         if path.is_dir() {
             // RECURSE: go into subdirectories
-            collect_files(&path, files)?;
+            collect_files(&path, files).await?;
         } else if path.is_file() {
             // Get file metadata
-            let metadata = fs::metadata(&path).map_err(|e| {
+            let metadata = tokio::fs::metadata(&path).await.map_err(|e| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(json!({"501": format!("Failed to read metadata: {}", e)})),

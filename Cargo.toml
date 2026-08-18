@@ -30,3 +30,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # MIME type detection
 mime_guess = "2"
 
+# Enables recursive async fn (see collect_files in routes/list.rs)
+async-recursion = "1"
+
